@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>Record Shelf — Thumbnail Migration</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+  <style>
+    body { font-family: monospace; background: #0e0e0e; color: #e8e0d4; padding: 40px; max-width: 620px; margin: 0 auto; }
+    h2   { font-size: 16px; margin-bottom: 8px; }
+    p    { font-size: 12px; color: #8a8178; margin-bottom: 24px; }
+    button {
+      background: #e8e0d4; color: #0e0e0e; border: none;
+      padding: 10px 22px; font-size: 13px; font-family: monospace;
+      cursor: pointer; border-radius: 6px; margin-right: 8px;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    #log { margin-top: 28px; font-size: 12px; line-height: 1.9; }
+    .ok   { color: #4caf50; }
+    .err  { color: #f44336; }
+    .info { color: #8a8178; }
+  </style>
+</head>
+<body>
+  <h2>Thumbnail Migration</h2>
+  <p>thumbUrl 없는 기존 앨범에 400px 썸네일을 생성하고 Firestore를 업데이트합니다.<br>
+     완료 후 이 파일은 삭제해주세요.</p>
+
+  <button id="btn-login" onclick="signIn()">Google로 로그인</button>
+  <button id="btn-run" onclick="runMigration()" disabled>마이그레이션 실행</button>
+
+  <div id="log"></div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyCgL6q4RWUZFheE-8eCnGUlSWejkZAxBR4",
+    authDomain: "record-shelf-7a622.firebaseapp.com",
+    projectId: "record-shelf-7a622",
+    storageBucket: "record-shelf-7a622.firebasestorage.app",
+    messagingSenderId: "1053859550640",
+    appId: "1:1053859550640:web:9ba6e7433351ff20fcf275"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth    = firebase.auth();
+  const db      = firebase.firestore();
+  const storage = firebase.storage();
+
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      document.getElementById('btn-login').textContent = user.email + ' ✓';
+      document.getElementById('btn-login').disabled = true;
+      document.getElementById('btn-run').disabled = false;
+      log('로그인: ' + user.email, 'ok');
+    }
+  });
+
+  function signIn() {
+    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+      .catch(e => log('로그인 실패: ' + e.message, 'err'));
+  }
+
+  function log(msg, type = 'info') {
+    const div = document.getElementById('log');
+    const line = document.createElement('div');
+    line.className = type;
+    line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+    div.appendChild(line);
+    div.scrollTop = div.scrollHeight;
+  }
+
+  function createThumbnail(imageUrl, maxSize = 400) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          blob => blob ? resolve(blob) : reject(new Error('toBlob failed')),
+          'image/jpeg', 0.85
+        );
+      };
+      img.onerror = () => reject(new Error('이미지 로드 실패 (CORS?)'));
+      img.src = imageUrl;
+    });
+  }
+
+  async function runMigration() {
+    const btn = document.getElementById('btn-run');
+    btn.disabled = true;
+    btn.textContent = '실행 중…';
+
+    log('Firestore 조회 중…');
+    const snapshot = await db.collection('vinyls').get();
+    const targets = snapshot.docs.filter(d => d.data().imageUrl && !d.data().thumbUrl);
+
+    log('전체 ' + snapshot.size + '개 중 대상: ' + targets.length + '개');
+    if (!targets.length) {
+      log('마이그레이션할 항목이 없습니다.', 'ok');
+      btn.textContent = '완료';
+      return;
+    }
+
+    let ok = 0, fail = 0;
+    for (const doc of targets) {
+      const { imageUrl, artist, album } = doc.data();
+      const label = (artist || '?') + ' - ' + (album || '?');
+      try {
+        log('처리 중: ' + label);
+        const blob = await createThumbnail(imageUrl);
+        const ref  = storage.ref('jackets/thumbs/thumb_' + doc.id + '.jpg');
+        await ref.put(blob, { contentType: 'image/jpeg' });
+        const thumbUrl = await ref.getDownloadURL();
+        await db.collection('vinyls').doc(doc.id).update({ thumbUrl });
+        log('완료: ' + label, 'ok');
+        ok++;
+      } catch (err) {
+        log('실패: ' + label + ' — ' + err.message, 'err');
+        fail++;
+      }
+    }
+
+    log('─────────────────────────────────────');
+    log('완료 ' + ok + '개 / 실패 ' + fail + '개', fail === 0 ? 'ok' : 'err');
+    btn.textContent = '완료';
+  }
+</script>
+</body>
+</html>

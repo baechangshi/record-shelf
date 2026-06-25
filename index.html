@@ -882,9 +882,10 @@
   let currentUser     = null;
   let currentVinylId  = null;
   let editingId       = null;
-  let selectedFile    = null;
+  let selectedFile     = null;
   let existingImageUrl = null;
-  let allVinyls       = [];
+  let existingThumbUrl = null;
+  let allVinyls        = [];
   let unsubscribe     = null;
 
   // ── Auth ─────────────────────────────────────────────
@@ -987,8 +988,8 @@
 
     grid.innerHTML = vinyls.map(v => `
       <div class="vinyl-card" onclick="openViewModal('${v.id}')">
-        ${v.imageUrl
-          ? `<img class="jacket" src="${escHtml(v.imageUrl)}" alt="${escHtml(v.album || '')}" loading="lazy" />`
+        ${v.imageUrl || v.thumbUrl
+          ? `<img class="jacket" src="${escHtml(v.thumbUrl || v.imageUrl)}" alt="${escHtml(v.album || '')}" loading="lazy" />`
           : `<div class="jacket-placeholder">⬛</div>`
         }
         <div class="card-info">
@@ -1041,6 +1042,7 @@
     editingId = id;
     selectedFile = null;
     existingImageUrl = null;
+    existingThumbUrl = null;
 
     document.getElementById('form-title').textContent = id ? '바이닐 수정' : '바이닐 추가';
     document.getElementById('image-preview-wrap').classList.remove('visible');
@@ -1060,6 +1062,7 @@
 
       if (v.imageUrl) {
         existingImageUrl = v.imageUrl;
+        existingThumbUrl = v.thumbUrl || null;
         document.getElementById('image-preview').src = v.imageUrl;
         document.getElementById('image-preview-wrap').classList.add('visible');
       }
@@ -1093,6 +1096,9 @@
       if (v?.imageUrl) {
         try { await storage.refFromURL(v.imageUrl).delete(); } catch {}
       }
+      if (v?.thumbUrl) {
+        try { await storage.refFromURL(v.thumbUrl).delete(); } catch {}
+      }
       await db.collection('vinyls').doc(currentVinylId).delete();
       closeModal('view-modal');
       showToast('삭제했습니다');
@@ -1113,13 +1119,19 @@
 
     try {
       let imageUrl = existingImageUrl || '';
+      let thumbUrl = existingThumbUrl || '';
 
       if (selectedFile) {
         const progress = document.getElementById('upload-progress');
         progress.classList.add('visible');
-        const ref = storage.ref(`jackets/${Date.now()}_${selectedFile.name}`);
+        const ts = Date.now();
+        const ref = storage.ref(`jackets/${ts}_${selectedFile.name}`);
         await ref.put(selectedFile);
         imageUrl = await ref.getDownloadURL();
+        const thumbBlob = await createThumbnail(selectedFile);
+        const thumbRef = storage.ref(`jackets/thumbs/thumb_${ts}_${selectedFile.name}.jpg`);
+        await thumbRef.put(thumbBlob, { contentType: 'image/jpeg' });
+        thumbUrl = await thumbRef.getDownloadURL();
         progress.classList.remove('visible');
       }
 
@@ -1133,6 +1145,7 @@
         targetPrice:   section === 'wishlist' ? document.getElementById('input-price').value.trim() : '',
         section,
         imageUrl,
+        thumbUrl,
         updatedAt:     firebase.firestore.FieldValue.serverTimestamp()
       };
 
@@ -1167,6 +1180,7 @@
   function clearImage() {
     selectedFile = null;
     existingImageUrl = null;
+    existingThumbUrl = null;
     document.getElementById('image-input').value = '';
     document.getElementById('image-preview-wrap').classList.remove('visible');
   }
@@ -1194,6 +1208,30 @@
     el.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+  }
+
+  // ── Thumbnail ─────────────────────────────────────────
+  function createThumbnail(file, maxSize = 400) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          blob => blob ? resolve(blob) : reject(new Error('toBlob failed')),
+          'image/jpeg', 0.85
+        );
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
   }
 
   // ── Util ──────────────────────────────────────────────
