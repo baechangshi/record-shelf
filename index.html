@@ -233,6 +233,15 @@
       text-overflow: ellipsis;
     }
 
+    .vinyl-card .card-price {
+      font-size: 11px;
+      color: var(--accent-dim);
+      margin-top: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .empty-state {
       grid-column: 1 / -1;
       text-align: center;
@@ -750,6 +759,10 @@
           <label>Acquired Date</label>
           <div class="meta-value" id="view-date"></div>
         </div>
+        <div class="meta-field" id="view-price-field">
+          <label>목표 가격</label>
+          <div class="meta-value" id="view-price"></div>
+        </div>
         <div class="meta-field">
           <label>Note</label>
           <div class="meta-value" id="view-note"></div>
@@ -813,10 +826,15 @@
 
       <div class="form-group">
         <label>섹션</label>
-        <select id="input-section">
+        <select id="input-section" onchange="onSectionChange(this.value)">
           <option value="owned">소장</option>
           <option value="wishlist">위시리스트</option>
         </select>
+      </div>
+
+      <div class="form-group" id="price-field" style="display:none">
+        <label>목표 가격</label>
+        <input type="text" id="input-price" placeholder="예) 50,000원" />
       </div>
 
       <div class="form-actions">
@@ -976,6 +994,9 @@
         <div class="card-info">
           <div class="card-album">${escHtml(v.album || '—')}</div>
           <div class="card-artist">${escHtml(v.artist || '—')}</div>
+          ${v.section === 'wishlist' && v.targetPrice
+            ? `<div class="card-price">${escHtml(v.targetPrice)}</div>`
+            : ''}
         </div>
       </div>
     `).join('');
@@ -996,7 +1017,10 @@
     setMetaValue('view-album',   v.album);
     setMetaValue('view-catalog', v.catalogNumber);
     setMetaValue('view-date',    v.acquiredDate);
+    setMetaValue('view-price',   v.targetPrice);
     setMetaValue('view-note',    v.note);
+    document.getElementById('view-price-field').style.display =
+      v.section === 'wishlist' ? '' : 'none';
 
     openModal('view-modal');
   }
@@ -1030,7 +1054,9 @@
       document.getElementById('input-catalog').value = v.catalogNumber || '';
       document.getElementById('input-date').value    = v.acquiredDate  || '';
       document.getElementById('input-note').value    = v.note    || '';
+      document.getElementById('input-price').value   = v.targetPrice || '';
       document.getElementById('input-section').value = v.section || 'owned';
+      onSectionChange(v.section || 'owned');
 
       if (v.imageUrl) {
         existingImageUrl = v.imageUrl;
@@ -1043,10 +1069,16 @@
       document.getElementById('input-catalog').value = '';
       document.getElementById('input-date').value    = '';
       document.getElementById('input-note').value    = '';
+      document.getElementById('input-price').value   = '';
       document.getElementById('input-section').value = currentSection;
+      onSectionChange(currentSection);
     }
 
     openModal('form-modal');
+  }
+
+  function onSectionChange(val) {
+    document.getElementById('price-field').style.display = val === 'wishlist' ? '' : 'none';
   }
 
   function editCurrentVinyl() {
@@ -1091,13 +1123,15 @@
         progress.classList.remove('visible');
       }
 
+      const section = document.getElementById('input-section').value;
       const data = {
         artist,
         album,
         catalogNumber: document.getElementById('input-catalog').value.trim(),
         acquiredDate:  document.getElementById('input-date').value,
         note:          document.getElementById('input-note').value.trim(),
-        section:       document.getElementById('input-section').value,
+        targetPrice:   section === 'wishlist' ? document.getElementById('input-price').value.trim() : '',
+        section,
         imageUrl,
         updatedAt:     firebase.firestore.FieldValue.serverTimestamp()
       };
