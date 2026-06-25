@@ -547,9 +547,150 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ─── Mobile Header (desktop에서는 숨김) ──────────────── */
+    #mobile-header {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 52px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 10;
+    }
+    #mobile-header .brand {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    #mob-btn-login {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    #mob-btn-login:hover { border-color: var(--accent-dim); color: var(--text); }
+    #mob-user-info {
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+    #mob-user-info.visible { display: flex; }
+    #mob-user-email {
+      font-size: 11px;
+      color: var(--text-muted);
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #mob-btn-logout {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 11px;
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+    #mob-btn-logout:hover { color: var(--danger); }
+
+    /* ─── Mobile Tabs (desktop에서는 숨김) ───────────────── */
+    #mobile-tabs {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 60px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      z-index: 10;
+    }
+    #mobile-tabs button {
+      flex: 1;
+      height: 100%;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      transition: color 0.15s;
+    }
+    #mobile-tabs button.active { color: var(--accent); }
+    #mobile-tabs .tab-count {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    #mobile-tabs button.active .tab-count { color: var(--accent-dim); }
+
+    /* ─── Mobile Breakpoint ──────────────────────────────── */
+    @media (max-width: 640px) {
+      body { display: block; }
+
+      #sidebar { display: none; }
+      #mobile-header { display: flex; }
+      #mobile-tabs { display: flex; }
+
+      #main {
+        margin-left: 0;
+        padding: 68px 16px 76px;
+      }
+
+      #main-header { margin-bottom: 20px; }
+
+      #vinyl-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      /* 상세 모달 — 이미지 위, 메타 아래 */
+      #view-modal .modal-body { grid-template-columns: 1fr; }
+      #view-modal .modal-image,
+      #view-modal .modal-image-placeholder {
+        border-radius: 12px 12px 0 0;
+        max-height: 240px;
+      }
+      #view-modal .modal-meta { padding: 24px 20px; }
+
+      /* 폼 모달 패딩 축소 + 필드 세로 스택 */
+      #form-modal .modal-body { padding: 24px 20px; }
+      .form-row { grid-template-columns: 1fr; }
+
+      /* 모달 — 하단 시트 스타일 */
+      .modal-overlay { padding: 0; align-items: flex-end; }
+      .modal { border-radius: 16px 16px 0 0; max-height: 88vh; }
+
+      /* 토스트 탭바 위로 */
+      #toast { bottom: 76px; }
+    }
   </style>
 </head>
 <body>
+
+<!-- ─── Mobile Header ─────────────────────────────────────── -->
+<div id="mobile-header">
+  <span class="brand">Record Shelf</span>
+  <div>
+    <button id="mob-btn-login" onclick="signIn()">로그인</button>
+    <div id="mob-user-info">
+      <span id="mob-user-email"></span>
+      <button id="mob-btn-logout" onclick="signOut()">로그아웃</button>
+    </div>
+  </div>
+</div>
 
 <!-- ─── Sidebar ──────────────────────────────────────────── -->
 <aside id="sidebar">
@@ -689,6 +830,18 @@
 <!-- ─── Toast ─────────────────────────────────────────────── -->
 <div id="toast"></div>
 
+<!-- ─── Mobile Tabs ───────────────────────────────────────── -->
+<div id="mobile-tabs">
+  <button id="mob-nav-owned" class="active" onclick="switchSection('owned')">
+    소장
+    <span class="tab-count" id="mob-count-owned">0</span>
+  </button>
+  <button id="mob-nav-wishlist" onclick="switchSection('wishlist')">
+    위시리스트
+    <span class="tab-count" id="mob-count-wishlist">0</span>
+  </button>
+</div>
+
 <!-- ─── Firebase Config & App ─────────────────────────────── -->
 <script>
   const firebaseConfig = {
@@ -724,6 +877,9 @@
     const userEmail = document.getElementById('user-email');
     const addBtn    = document.getElementById('btn-add');
     const viewActions = document.getElementById('view-actions');
+    const mobLoginBtn  = document.getElementById('mob-btn-login');
+    const mobUserInfo  = document.getElementById('mob-user-info');
+    const mobUserEmail = document.getElementById('mob-user-email');
 
     if (user) {
       loginBtn.style.display  = 'none';
@@ -732,12 +888,17 @@
       addBtn.classList.add('visible');
       addBtn.style.display    = 'flex';
       viewActions.classList.add('visible');
+      mobLoginBtn.style.display = 'none';
+      mobUserInfo.classList.add('visible');
+      mobUserEmail.textContent  = user.email;
     } else {
       loginBtn.style.display  = '';
       userInfo.classList.remove('visible');
       addBtn.classList.remove('visible');
       addBtn.style.display    = 'none';
       viewActions.classList.remove('visible');
+      mobLoginBtn.style.display = '';
+      mobUserInfo.classList.remove('visible');
     }
   });
 
@@ -759,6 +920,8 @@
 
     document.getElementById('nav-owned').classList.toggle('active', section === 'owned');
     document.getElementById('nav-wishlist').classList.toggle('active', section === 'wishlist');
+    document.getElementById('mob-nav-owned').classList.toggle('active', section === 'owned');
+    document.getElementById('mob-nav-wishlist').classList.toggle('active', section === 'wishlist');
 
     subscribeVinyls();
   }
@@ -784,11 +947,16 @@
   }
 
   function updateCounts() {
-    // counts require separate queries; use snapshot lengths
     db.collection('vinyls').where('section', '==', 'owned').get()
-      .then(s => document.getElementById('count-owned').textContent = s.size);
+      .then(s => {
+        document.getElementById('count-owned').textContent = s.size;
+        document.getElementById('mob-count-owned').textContent = s.size;
+      });
     db.collection('vinyls').where('section', '==', 'wishlist').get()
-      .then(s => document.getElementById('count-wishlist').textContent = s.size);
+      .then(s => {
+        document.getElementById('count-wishlist').textContent = s.size;
+        document.getElementById('mob-count-wishlist').textContent = s.size;
+      });
   }
 
   // ── Render Grid ───────────────────────────────────────
